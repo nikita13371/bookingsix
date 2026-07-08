@@ -2,20 +2,27 @@
 const SUPABASE_URL = 'https://rlhrzhtrumxuenycurio.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsaHJ6aHRydW14dWVueWN1cmlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0OTE3MTgsImV4cCI6MjA5OTA2NzcxOH0.do-PSyO3h1gAOpY0Wj-GYkja_OiuNwi77J3w0FwOTYk';
 
-async function sbFetch(path, options = {}) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    ...options,
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      'Prefer': options.prefer || '',
-      ...options.headers
+async function sbFetch(path, options = {}, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+        ...options,
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': options.prefer || '',
+          ...options.headers
+        }
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
+    } catch(e) {
+      if (i === retries - 1) throw e;
+      await new Promise(r => setTimeout(r, 1000 * (i + 1)));
     }
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
+  }
 }
 
 // ── State ──
@@ -45,6 +52,7 @@ function switchTab(tab) {
 }
 
 async function loadAll() {
+  showLoading(true);
   try {
     const data = await sbFetch('bookings?select=*&order=time.asc');
     bookings = {};
@@ -53,7 +61,6 @@ async function loadAll() {
       if (!bookings[b.date_key]) bookings[b.date_key] = [];
       bookings[b.date_key].push(b);
     });
-    // Count completed this month for counter
     const allData = data || [];
     const thisMonth = now.getMonth() + 1;
     const thisYear = now.getFullYear();
@@ -63,11 +70,27 @@ async function loadAll() {
       return parseInt(y) === thisYear && parseInt(m) === thisMonth;
     });
     document.getElementById('counterVal').textContent = done.length;
-  } catch(e) { console.error(e); }
+  } catch(e) {
+    console.error(e);
+    showToast('Ошибка соединения — повтор...', true);
+    setTimeout(loadAll, 5000);
+  }
+  showLoading(false);
   renderCal();
   renderUpcoming();
   if (selectedDate) { updateSlotSummary(); renderDayBookings(); }
   if (document.getElementById('page-tech').classList.contains('active')) renderTechBoard();
+}
+
+function showLoading(on) {
+  let el = document.getElementById('globalLoader');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'globalLoader';
+    el.style.cssText = `position:fixed;top:56px;left:0;right:0;height:2px;background:var(--green);z-index:200;transition:opacity 0.3s;`;
+    document.body.appendChild(el);
+  }
+  el.style.opacity = on ? '1' : '0';
 }
 
 function fmt(n) { return Number(n||0).toLocaleString('ru-KZ'); }
