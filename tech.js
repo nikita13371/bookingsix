@@ -1,5 +1,8 @@
 // ── Tech Department Logic ──
 
+const SUPABASE_URL = 'https://rlhrzhtrumxuenycurio.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsaHJ6aHRydW14dWVueWN1cmlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0OTE3MTgsImV4cCI6MjA5OTA2NzcxOH0.do-PSyO3h1gAOpY0Wj-GYkja_OiuNwi77J3w0FwOTYk';
+
 const TASK_WEIGHTS = { 'Реклама':1, 'Мультик':2, 'Мультик Lux':3, 'Фильм':4 };
 const ACTIVE_STATUSES = ['В работе','Ждём бриф','Ждём оплату','Взять в работу'];
 

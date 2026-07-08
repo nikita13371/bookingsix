@@ -1,6 +1,6 @@
 // ── Supabase ──
-const SUPABASE_URL = 'https://gmsvzrhhgtaowhzopilj.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdtc3Z6cmhoZ3Rhb3doem9waWxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MzQxODcsImV4cCI6MjA5NDUxMDE4N30.5p3Owu_sEsCOtLUsmwIyLbeVRXSvu2vB27aqXdBNGWM';
+const SUPABASE_URL = 'https://rlhrzhtrumxuenycurio.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJsaHJ6aHRydW14dWVueWN1cmlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0OTE3MTgsImV4cCI6MjA5OTA2NzcxOH0.do-PSyO3h1gAOpY0Wj-GYkja_OiuNwi77J3w0FwOTYk';
 
 async function sbFetch(path, options = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
