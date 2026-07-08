@@ -38,7 +38,10 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
   document.getElementById('page-' + tab).classList.add('active');
   document.getElementById('tab-' + tab).classList.add('active');
-  if (tab === 'tech') renderTechBoard();
+  if (tab === 'tech') {
+    renderMembers();
+    renderTechBoard();
+  }
 }
 
 async function loadAll() {

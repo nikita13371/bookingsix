@@ -404,3 +404,8 @@ function renderTechStats() {
 
 // ── Init ──
 renderMembers();
+// Populate dropdown after tasks load
+setTimeout(async () => {
+  await fetchAllTasksRaw();
+  renderMembers();
+}, 500);
