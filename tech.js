@@ -2,16 +2,47 @@
 
 const TASK_WEIGHTS = { 'Реклама':1, 'Мультик':2, 'Мультик Lux':3, 'Фильм':4 };
 
-let members = JSON.parse(localStorage.getItem('sixg_members') || '[]');
+let members = [];
 let currentFilter = 'all';
 let selectedTask = null;
 let allTasksRaw = [];
-let currentMemberView = null; // null = все, string = имя технаря
+let currentMemberView = null;
 
-function saveMembers() { localStorage.setItem('sixg_members', JSON.stringify(members)); }
 function fmt2(n) { return Number(n||0).toLocaleString('ru-KZ'); }
 
-// ── Fetch tasks from Supabase ──
+// ── Members from Supabase ──
+async function loadMembers() {
+  try {
+    const data = await sbFetch('members?select=*&order=created_at.asc');
+    members = data || [];
+  } catch(e) { console.error('loadMembers error:', e); }
+}
+
+async function saveMemberToDb(name, spec) {
+  try {
+    await sbFetch('members', {
+      method: 'POST', prefer: 'return=minimal',
+      body: JSON.stringify({ name, spec, online: true })
+    });
+  } catch(e) { console.error(e); }
+}
+
+async function deleteMemberFromDb(id) {
+  try {
+    await sbFetch(`members?id=eq.${id}`, { method: 'DELETE' });
+  } catch(e) { console.error(e); }
+}
+
+async function toggleOnlineDb(id, online) {
+  try {
+    await sbFetch(`members?id=eq.${id}`, {
+      method: 'PATCH', prefer: 'return=minimal',
+      body: JSON.stringify({ online: !online })
+    });
+  } catch(e) { console.error(e); }
+}
+
+// ── Fetch tasks ──
 async function fetchAllTasksRaw() {
   try {
     const data = await sbFetch('bookings?select=*&order=date_key.asc');
@@ -84,7 +115,7 @@ function autoAssign(task) {
   return best;
 }
 
-// ── Open member screen ──
+// ── Member screen ──
 function selectMember(name) {
   currentMemberView = name;
   closeTaskDetail();
@@ -115,7 +146,7 @@ function renderMembers() {
     return;
   }
 
-  wrap.innerHTML = members.map((m,i) => {
+  wrap.innerHTML = members.map((m) => {
     const { count, weight } = getMemberLoad(m.name);
     const maxW = 10;
     const pct = Math.min(100, (weight/maxW)*100);
@@ -125,8 +156,8 @@ function renderMembers() {
       <div class="member-top">
         <span class="member-name">${m.name}</span>
         <div style="display:flex;gap:6px;align-items:center">
-          <button class="member-del" onclick="event.stopPropagation();toggleOnline(${i})" title="${m.online?'Онлайн':'Оффлайн'}">${m.online?'🟢':'⚫'}</button>
-          <button class="member-del" onclick="event.stopPropagation();deleteMember(${i})">✕</button>
+          <button class="member-del" onclick="event.stopPropagation();toggleOnline('${m.id}',${m.online})" title="${m.online?'Онлайн':'Оффлайн'}">${m.online?'🟢':'⚫'}</button>
+          <button class="member-del" onclick="event.stopPropagation();deleteMember('${m.id}','${m.name}')">✕</button>
         </div>
       </div>
       <div class="member-load">${count} задач · вес ${weight}</div>
@@ -137,14 +168,19 @@ function renderMembers() {
   renderTechStats();
 }
 
-function toggleOnline(i) {
-  members[i].online = !members[i].online;
-  saveMembers(); renderMembers();
+async function toggleOnline(id, currentOnline) {
+  await toggleOnlineDb(id, currentOnline);
+  await loadMembers();
+  renderMembers();
 }
 
-function deleteMember(i) {
-  if (!confirm(`Удалить ${members[i].name}?`)) return;
-  members.splice(i,1); saveMembers(); renderMembers(); renderTechBoard();
+async function deleteMember(id, name) {
+  if (!confirm(`Удалить ${name}?`)) return;
+  await deleteMemberFromDb(id);
+  if (currentMemberView === name) currentMemberView = null;
+  await loadMembers();
+  renderMembers();
+  renderTechBoard();
 }
 
 // ── Add member modal ──
@@ -155,18 +191,19 @@ function showAddMember() {
 function closeAddMember() {
   document.getElementById('addMemberModal').style.display = 'none';
 }
-function saveMember() {
+async function saveMember() {
   const name = document.getElementById('memberName').value.trim();
   if (!name) return;
-  members.push({ name, spec: document.getElementById('memberSpec').value, online: true });
-  saveMembers();
+  const spec = document.getElementById('memberSpec').value;
+  await saveMemberToDb(name, spec);
   document.getElementById('memberName').value = '';
   closeAddMember();
+  await loadMembers();
   renderMembers();
   renderTechBoard();
 }
 
-// ── Filter buttons ──
+// ── Filter ──
 function filterTech(type, btn) {
   currentFilter = type;
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
@@ -176,7 +213,7 @@ function filterTech(type, btn) {
 
 // ── Render board ──
 async function renderTechBoard() {
-  await fetchAllTasksRaw();
+  await Promise.all([fetchAllTasksRaw(), loadMembers()]);
   renderMembers();
 
   const board = document.getElementById('techBoard');
@@ -184,21 +221,17 @@ async function renderTechBoard() {
 
   let tasks = getAllTasks();
 
-  // Если открыт конкретный технарь — показываем его экран
   if (currentMemberView) {
     renderMemberScreen(currentMemberView, tasks, board);
     return;
   }
 
-  // Общий вид
   if (currentFilter !== 'all') tasks = tasks.filter(t=>getPriority(t.date_key)===currentFilter);
-
   tasks.sort((a,b)=>{
     const order={urgent:0,medium:1,normal:2};
     return (order[getPriority(a.date_key)]||2)-(order[getPriority(b.date_key)]||2);
   });
 
-  // Badge
   const badge = document.getElementById('techBadge');
   const urgentCount = getAllTasks().filter(t=>getPriority(t.date_key)==='urgent').length;
   if (badge) {
@@ -206,8 +239,8 @@ async function renderTechBoard() {
     else badge.style.display='none';
   }
 
-  // Show filter bar
-  document.getElementById('techBoardHeader').style.display = 'flex';
+  const header = document.getElementById('techBoardHeader');
+  if (header) header.style.display = 'flex';
 
   if (!tasks.length) {
     board.innerHTML=`<div class="tech-empty"><div class="empty-icon">⚡</div>
@@ -223,18 +256,16 @@ async function renderTechBoard() {
 function renderMemberScreen(memberName, allTasks, board) {
   const member = members.find(m => m.name === memberName);
   const tasks = allTasks.filter(t => t.tech_assigned === memberName);
-  const unassigned = allTasks.filter(t => !t.tech_assigned);
-
   const totalSum = tasks.reduce((s,t)=>s+(t.total||0),0);
   const totalRem = tasks.reduce((s,t)=>s+Math.max(0,(t.total||0)-(t.prepay||0)),0);
 
-  // Hide filter bar
-  document.getElementById('techBoardHeader').style.display = 'none';
+  const header = document.getElementById('techBoardHeader');
+  if (header) header.style.display = 'none';
 
   board.innerHTML = `
     <div style="grid-column:1/-1;margin-bottom:1rem">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem">
-        <button onclick="backToAll()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 14px;color:var(--text2);font-size:13px;cursor:pointer;font-family:'Syne',sans-serif;font-weight:600;transition:all 0.15s" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">← Назад</button>
+        <button onclick="backToAll()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 14px;color:var(--text2);font-size:13px;cursor:pointer;font-family:'Syne',sans-serif;font-weight:600" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">← Назад</button>
         <div>
           <span style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--text)">${memberName}</span>
           <span style="margin-left:8px;font-size:12px;color:var(--text3)">${member?.online?'🟢 Онлайн':'⚫ Оффлайн'}</span>
@@ -255,17 +286,17 @@ function renderMemberScreen(memberName, allTasks, board) {
         </div>
       </div>
     </div>
-    ${tasks.length === 0 ? `<div class="tech-empty" style="grid-column:1/-1"><div class="empty-icon">📋</div><p class="empty-title">Нет задач</p><p class="empty-sub">У ${memberName} пока нет назначенных заказов</p></div>` :
-      tasks.sort((a,b)=>{
-        const order={urgent:0,medium:1,normal:2};
-        return (order[getPriority(a.date_key)]||2)-(order[getPriority(b.date_key)]||2);
-      }).map(t => renderTaskCard(t, true)).join('')
-    }
-  `;
+    ${tasks.length === 0
+      ? `<div class="tech-empty" style="grid-column:1/-1"><div class="empty-icon">📋</div><p class="empty-title">Нет задач</p><p class="empty-sub">У ${memberName} пока нет назначенных заказов</p></div>`
+      : tasks.sort((a,b)=>{
+          const order={urgent:0,medium:1,normal:2};
+          return (order[getPriority(a.date_key)]||2)-(order[getPriority(b.date_key)]||2);
+        }).map(t => renderTaskCard(t)).join('')
+    }`;
 }
 
-// ── Task card HTML ──
-function renderTaskCard(t, showUnassign = false) {
+// ── Task card ──
+function renderTaskCard(t) {
   const p = getPriority(t.date_key);
   const rem = Math.max(0,(t.total||0)-(t.prepay||0));
   const dl = daysLeft(t.date_key);
@@ -299,7 +330,7 @@ function renderTaskCard(t, showUnassign = false) {
   </div>`;
 }
 
-// ── Task detail panel ──
+// ── Task detail ──
 function openTaskDetail(id) {
   const t = getAllTasks().find(x=>x.id===id);
   if (!t) return;
@@ -354,10 +385,9 @@ async function unassignTask() {
       method:'PATCH', prefer:'return=minimal',
       body:JSON.stringify({tech_assigned:null})
     });
-    selectedTask.tech_assigned = null;
-    const currentId = selectedTask.id;
+    const id = selectedTask.id;
     await renderTechBoard();
-    openTaskDetail(currentId);
+    openTaskDetail(id);
   } catch(e){console.error(e);}
 }
 
@@ -368,10 +398,9 @@ async function reassignTask(memberName) {
       method:'PATCH', prefer:'return=minimal',
       body:JSON.stringify({tech_assigned:memberName})
     });
-    selectedTask.tech_assigned = memberName;
-    const currentId = selectedTask.id;
+    const id = selectedTask.id;
     await renderTechBoard();
-    openTaskDetail(currentId);
+    openTaskDetail(id);
   } catch(e){console.error(e);}
 }
 
@@ -403,9 +432,4 @@ function renderTechStats() {
 }
 
 // ── Init ──
-renderMembers();
-// Populate dropdown after tasks load
-setTimeout(async () => {
-  await fetchAllTasksRaw();
-  renderMembers();
-}, 500);
+loadMembers().then(() => renderMembers());
