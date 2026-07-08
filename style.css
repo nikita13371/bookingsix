@@ -288,7 +288,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 
 /* Task Detail */
 .task-detail{background:var(--bg2);border-left:1px solid var(--border);
-  padding:1.25rem;overflow-y:auto;animation:slideIn 0.2s ease}
+  padding:1.25rem;overflow-y:auto;animation:slideIn 0.2s ease;
+  position:relative;z-index:10}
 @keyframes slideIn{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:translateX(0)}}
 .td-header{display:flex;align-items:center;justify-content:space-between;
   margin-bottom:1.25rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
@@ -327,7 +328,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 .modal-body{display:flex;flex-direction:column;gap:12px}
 .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}
 
-/* Scrollbar */
+/* Task card click fix */
+.task-card *{pointer-events:none}
+.task-card{pointer-events:all;cursor:pointer}
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}

@@ -262,6 +262,7 @@ function openTaskDetail(id) {
     </div>
     <div class="td-section">
       <div class="td-section-title">Назначить</div>
+      ${t.tech_assigned ? `<button class="td-action-btn danger" onclick="unassignTask()" style="margin-bottom:8px;width:100%">✕ Снять назначение (${t.tech_assigned})</button>` : ''}
       <select class="reassign-select" id="reassignSelect" onchange="reassignTask(this.value)">
         <option value="">Выбрать специалиста</option>
         ${members.map(m=>`<option value="${m.name}" ${t.tech_assigned===m.name?'selected':''}>${m.name} ${m.online?'🟢':'⚫'}</option>`).join('')}
@@ -271,6 +272,19 @@ function openTaskDetail(id) {
       <button class="td-action-btn" onclick="autoAssignTask()">⚡ Авто-назначение</button>
       <button class="td-action-btn danger" onclick="closeTaskDetail()">Закрыть</button>
     </div>`;
+}
+
+async function unassignTask() {
+  if (!selectedTask) return;
+  try {
+    await sbFetch(`bookings?id=eq.${selectedTask.id}`,{
+      method:'PATCH', prefer:'return=minimal',
+      body:JSON.stringify({tech_assigned:null})
+    });
+    selectedTask.tech_assigned = null;
+    await renderTechBoard();
+    openTaskDetail(selectedTask.id);
+  } catch(e){console.error(e);}
 }
 
 async function reassignTask(memberName) {
