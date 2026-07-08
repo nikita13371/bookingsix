@@ -1,17 +1,17 @@
 // ── Tech Department ──
 
 const TASK_WEIGHTS = { 'Реклама':1, 'Мультик':2, 'Мультик Lux':3, 'Фильм':4 };
-const ACTIVE_STATUSES = ['В работе','Ждём бриф','Ждём оплату','Взять в работу',''];
 
 let members = JSON.parse(localStorage.getItem('sixg_members') || '[]');
 let currentFilter = 'all';
 let selectedTask = null;
 let allTasksRaw = [];
+let currentMemberView = null; // null = все, string = имя технаря
 
 function saveMembers() { localStorage.setItem('sixg_members', JSON.stringify(members)); }
 function fmt2(n) { return Number(n||0).toLocaleString('ru-KZ'); }
 
-// ── Fetch all tasks directly from Supabase ──
+// ── Fetch tasks from Supabase ──
 async function fetchAllTasksRaw() {
   try {
     const data = await sbFetch('bookings?select=*&order=date_key.asc');
@@ -84,14 +84,30 @@ function autoAssign(task) {
   return best;
 }
 
-// ── Render members ──
+// ── Open member screen ──
+function selectMember(name) {
+  currentMemberView = name;
+  closeTaskDetail();
+  renderTechBoard();
+}
+
+function backToAll() {
+  currentMemberView = null;
+  closeTaskDetail();
+  renderTechBoard();
+}
+
+// ── Render members sidebar ──
 function renderMembers() {
   const wrap = document.getElementById('techMembers');
   const sel = document.getElementById('memberFilter');
-  if (!wrap || !sel) return;
+  if (!wrap) return;
 
-  sel.innerHTML = '<option value="all">Все спецы</option>' +
-    members.map(m=>`<option value="${m.name}">${m.name}</option>`).join('');
+  if (sel) {
+    sel.innerHTML = '<option value="all">Все спецы</option>' +
+      members.map(m=>`<option value="${m.name}">${m.name}</option>`).join('');
+    if (currentMemberView) sel.value = currentMemberView;
+  }
 
   if (!members.length) {
     wrap.innerHTML = '<p style="font-size:12px;color:var(--text3);padding:8px 0">Нажми + чтобы добавить специалиста</p>';
@@ -104,12 +120,13 @@ function renderMembers() {
     const maxW = 10;
     const pct = Math.min(100, (weight/maxW)*100);
     const barCls = pct>80?'danger':pct>50?'warn':'';
-    return `<div class="member-card">
+    const isSelected = currentMemberView === m.name;
+    return `<div class="member-card ${isSelected?'selected':''}" onclick="selectMember('${m.name}')">
       <div class="member-top">
         <span class="member-name">${m.name}</span>
         <div style="display:flex;gap:6px;align-items:center">
-          <button class="member-del" onclick="toggleOnline(${i})" title="${m.online?'Онлайн':'Оффлайн'}">${m.online?'🟢':'⚫'}</button>
-          <button class="member-del" onclick="deleteMember(${i})">✕</button>
+          <button class="member-del" onclick="event.stopPropagation();toggleOnline(${i})" title="${m.online?'Онлайн':'Оффлайн'}">${m.online?'🟢':'⚫'}</button>
+          <button class="member-del" onclick="event.stopPropagation();deleteMember(${i})">✕</button>
         </div>
       </div>
       <div class="member-load">${count} задач · вес ${weight}</div>
@@ -149,7 +166,7 @@ function saveMember() {
   renderTechBoard();
 }
 
-// ── Filter ──
+// ── Filter buttons ──
 function filterTech(type, btn) {
   currentFilter = type;
   document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
@@ -166,8 +183,14 @@ async function renderTechBoard() {
   if (!board) return;
 
   let tasks = getAllTasks();
-  const memberFilter = document.getElementById('memberFilter')?.value || 'all';
-  if (memberFilter !== 'all') tasks = tasks.filter(t=>t.tech_assigned===memberFilter);
+
+  // Если открыт конкретный технарь — показываем его экран
+  if (currentMemberView) {
+    renderMemberScreen(currentMemberView, tasks, board);
+    return;
+  }
+
+  // Общий вид
   if (currentFilter !== 'all') tasks = tasks.filter(t=>getPriority(t.date_key)===currentFilter);
 
   tasks.sort((a,b)=>{
@@ -183,15 +206,69 @@ async function renderTechBoard() {
     else badge.style.display='none';
   }
 
+  // Show filter bar
+  document.getElementById('techBoardHeader').style.display = 'flex';
+
   if (!tasks.length) {
-    board.innerHTML=`<div class="tech-empty">
-      <div class="empty-icon">⚡</div>
+    board.innerHTML=`<div class="tech-empty"><div class="empty-icon">⚡</div>
       <p class="empty-title">Нет задач</p>
-      <p class="empty-sub">Задачи появятся из Google Sheets автоматически</p>
-    </div>`;
+      <p class="empty-sub">Задачи появятся из Google Sheets автоматически</p></div>`;
     return;
   }
 
+  board.innerHTML = tasks.map(t => renderTaskCard(t)).join('');
+}
+
+// ── Member screen ──
+function renderMemberScreen(memberName, allTasks, board) {
+  const member = members.find(m => m.name === memberName);
+  const tasks = allTasks.filter(t => t.tech_assigned === memberName);
+  const unassigned = allTasks.filter(t => !t.tech_assigned);
+
+  const totalSum = tasks.reduce((s,t)=>s+(t.total||0),0);
+  const totalRem = tasks.reduce((s,t)=>s+Math.max(0,(t.total||0)-(t.prepay||0)),0);
+
+  // Hide filter bar
+  document.getElementById('techBoardHeader').style.display = 'none';
+
+  board.innerHTML = `
+    <div style="grid-column:1/-1;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem">
+        <button onclick="backToAll()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 14px;color:var(--text2);font-size:13px;cursor:pointer;font-family:'Syne',sans-serif;font-weight:600;transition:all 0.15s" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">← Назад</button>
+        <div>
+          <span style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--text)">${memberName}</span>
+          <span style="margin-left:8px;font-size:12px;color:var(--text3)">${member?.online?'🟢 Онлайн':'⚫ Оффлайн'}</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1.5rem">
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 16px">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);font-family:'Syne',sans-serif">Задач</div>
+          <div style="font-size:20px;font-weight:700;font-family:'Syne',sans-serif;color:var(--text)">${tasks.length}</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 16px">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);font-family:'Syne',sans-serif">Сумма</div>
+          <div style="font-size:20px;font-weight:700;font-family:'Syne',sans-serif;color:var(--green)">${fmt2(totalSum)} ₸</div>
+        </div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 16px">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text3);font-family:'Syne',sans-serif">Остаток</div>
+          <div style="font-size:20px;font-weight:700;font-family:'Syne',sans-serif;color:var(--pink)">${fmt2(totalRem)} ₸</div>
+        </div>
+      </div>
+    </div>
+    ${tasks.length === 0 ? `<div class="tech-empty" style="grid-column:1/-1"><div class="empty-icon">📋</div><p class="empty-title">Нет задач</p><p class="empty-sub">У ${memberName} пока нет назначенных заказов</p></div>` :
+      tasks.sort((a,b)=>{
+        const order={urgent:0,medium:1,normal:2};
+        return (order[getPriority(a.date_key)]||2)-(order[getPriority(b.date_key)]||2);
+      }).map(t => renderTaskCard(t, true)).join('')
+    }
+  `;
+}
+
+// ── Task card HTML ──
+function renderTaskCard(t, showUnassign = false) {
+  const p = getPriority(t.date_key);
+  const rem = Math.max(0,(t.total||0)-(t.prepay||0));
+  const dl = daysLeft(t.date_key);
   const statusColors = {
     'В работе':'rgba(34,197,94,0.12)','Ждём бриф':'rgba(59,130,246,0.12)',
     'Ждём оплату':'rgba(245,158,11,0.12)','Взять в работу':'rgba(255,255,255,0.05)'
@@ -200,34 +277,29 @@ async function renderTechBoard() {
     'В работе':'#22c55e','Ждём бриф':'#60a5fa',
     'Ждём оплату':'#f59e0b','Взять в работу':'#8a8a96'
   };
+  const sBg = statusColors[t.status]||'rgba(255,255,255,0.05)';
+  const sTxt = statusTxtColors[t.status]||'#8a8a96';
 
-  board.innerHTML = tasks.map(t => {
-    const p = getPriority(t.date_key);
-    const rem = Math.max(0,(t.total||0)-(t.prepay||0));
-    const dl = daysLeft(t.date_key);
-    const sBg = statusColors[t.status]||'rgba(255,255,255,0.05)';
-    const sTxt = statusTxtColors[t.status]||'#8a8a96';
-    return `<div class="task-card ${p}" onclick="openTaskDetail('${t.id}')">
-      <div class="task-header">
-        <span class="task-priority ${p}">${priorityLabel(p)}</span>
-        <span class="task-assignee">${t.tech_assigned||'Не назначен'}</span>
+  return `<div class="task-card ${p}" onclick="openTaskDetail('${t.id}')">
+    <div class="task-header">
+      <span class="task-priority ${p}">${priorityLabel(p)}</span>
+      <span class="task-assignee">${t.tech_assigned||'Не назначен'}</span>
+    </div>
+    <div class="task-body">
+      <div class="task-name">${t.first_name} ${t.last_name||''}</div>
+      <div class="task-type">${t.type||'—'} ${t.duration?'· '+t.duration:''}</div>
+      <div class="task-deadline ${p}">Сдача: ${dl}</div>
+      ${t.status?`<span style="background:${sBg};color:${sTxt};margin-top:6px;display:inline-block;padding:2px 8px;border-radius:5px;font-size:10px;font-family:'Syne',sans-serif;font-weight:600">${t.status}</span>`:''}
+      <div class="task-finance">
+        <div class="tf-item"><span class="tf-label">Сумма</span><span class="tf-val">${fmt2(t.total)} ₸</span></div>
+        <div class="tf-item"><span class="tf-label">Предоплата</span><span class="tf-val green">${fmt2(t.prepay)} ₸</span></div>
+        <div class="tf-item"><span class="tf-label">Остаток</span><span class="tf-val ${rem>0?'pink':''}">${fmt2(rem)} ₸</span></div>
       </div>
-      <div class="task-body">
-        <div class="task-name">${t.first_name} ${t.last_name||''}</div>
-        <div class="task-type">${t.type||'—'} ${t.duration?'· '+t.duration:''}</div>
-        <div class="task-deadline ${p}">Сдача: ${dl}</div>
-        ${t.status?`<span class="task-status-badge" style="background:${sBg};color:${sTxt};margin-top:6px;display:inline-block;padding:2px 8px;border-radius:5px;font-size:10px;font-family:'Syne',sans-serif;font-weight:600">${t.status}</span>`:''}
-        <div class="task-finance">
-          <div class="tf-item"><span class="tf-label">Сумма</span><span class="tf-val">${fmt2(t.total)} ₸</span></div>
-          <div class="tf-item"><span class="tf-label">Предоплата</span><span class="tf-val green">${fmt2(t.prepay)} ₸</span></div>
-          <div class="tf-item"><span class="tf-label">Остаток</span><span class="tf-val ${rem>0?'pink':''}">${fmt2(rem)} ₸</span></div>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
+    </div>
+  </div>`;
 }
 
-// ── Task detail ──
+// ── Task detail panel ──
 function openTaskDetail(id) {
   const t = getAllTasks().find(x=>x.id===id);
   if (!t) return;
@@ -236,6 +308,7 @@ function openTaskDetail(id) {
   detail.style.display = 'block';
   const rem = Math.max(0,(t.total||0)-(t.prepay||0));
   const p = getPriority(t.date_key);
+
   document.getElementById('tdBody').innerHTML = `
     <div class="td-section">
       <div class="td-section-title">Клиент</div>
@@ -262,7 +335,7 @@ function openTaskDetail(id) {
     </div>
     <div class="td-section">
       <div class="td-section-title">Назначить</div>
-      ${t.tech_assigned ? `<button class="td-action-btn danger" onclick="unassignTask()" style="margin-bottom:8px;width:100%">✕ Снять назначение (${t.tech_assigned})</button>` : ''}
+      ${t.tech_assigned?`<button class="td-action-btn danger" onclick="unassignTask()" style="width:100%;margin-bottom:8px;text-align:center">✕ Снять (${t.tech_assigned})</button>`:''}
       <select class="reassign-select" id="reassignSelect" onchange="reassignTask(this.value)">
         <option value="">Выбрать специалиста</option>
         ${members.map(m=>`<option value="${m.name}" ${t.tech_assigned===m.name?'selected':''}>${m.name} ${m.online?'🟢':'⚫'}</option>`).join('')}
@@ -282,8 +355,9 @@ async function unassignTask() {
       body:JSON.stringify({tech_assigned:null})
     });
     selectedTask.tech_assigned = null;
+    const currentId = selectedTask.id;
     await renderTechBoard();
-    openTaskDetail(selectedTask.id);
+    openTaskDetail(currentId);
   } catch(e){console.error(e);}
 }
 
@@ -295,8 +369,9 @@ async function reassignTask(memberName) {
       body:JSON.stringify({tech_assigned:memberName})
     });
     selectedTask.tech_assigned = memberName;
+    const currentId = selectedTask.id;
     await renderTechBoard();
-    openTaskDetail(selectedTask.id);
+    openTaskDetail(currentId);
   } catch(e){console.error(e);}
 }
 
@@ -304,7 +379,6 @@ function autoAssignTask() {
   if (!selectedTask) return;
   const member = autoAssign(selectedTask);
   if (!member){alert('Нет онлайн специалистов!');return;}
-  document.getElementById('reassignSelect').value = member.name;
   reassignTask(member.name);
 }
 
@@ -316,7 +390,6 @@ function closeTaskDetail() {
 // ── Stats ──
 function renderTechStats() {
   const tasks = getAllTasks();
-  const active = tasks.length;
   const totalSum = tasks.reduce((s,t)=>s+(t.total||0),0);
   const totalRem = tasks.reduce((s,t)=>s+Math.max(0,(t.total||0)-(t.prepay||0)),0);
   const doneEl = document.getElementById('statDone');
@@ -324,7 +397,7 @@ function renderTechStats() {
   const sumEl = document.getElementById('statSum');
   const remEl = document.getElementById('statRemainder');
   if(doneEl) doneEl.textContent = document.getElementById('counterVal')?.textContent||'0';
-  if(activeEl) activeEl.textContent = active;
+  if(activeEl) activeEl.textContent = tasks.length;
   if(sumEl) sumEl.textContent = fmt2(totalSum)+' ₸';
   if(remEl) remEl.textContent = fmt2(totalRem)+' ₸';
 }
