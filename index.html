@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIXG{prod}.booking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="grain"></div>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="logo">
+      <span class="logo-mark">▶</span>
+      <span class="logo-text">SIXG<span class="logo-accent">{prod}</span>.booking</span>
+    </div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchTab('calendar')" id="tab-calendar">
+        <span class="tab-icon">📅</span> Календарь
+      </button>
+      <button class="nav-tab" onclick="switchTab('tech')" id="tab-tech">
+        <span class="tab-icon">⚡</span> Тех отдел
+        <span class="tab-badge" id="techBadge" style="display:none">0</span>
+      </button>
+    </div>
+    <div class="nav-right">
+      <div class="nav-counter" id="monthCounter">
+        <span class="counter-label">МЕСЯЦ</span>
+        <span class="counter-val" id="counterVal">0</span>
+      </div>
+      <div class="status-dot"></div>
+      <span class="nav-status">LIVE</span>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════════════════════════════════════
+     TAB 1 — CALENDAR
+══════════════════════════════════════════ -->
+<div class="tab-content active" id="page-calendar">
+<main class="main">
+  <section class="cal-section">
+    <div class="cal-header">
+      <button class="arrow-btn" id="prevBtn">←</button>
+      <div class="cal-month-wrap">
+        <span class="cal-month" id="calMonth"></span>
+        <span class="cal-year" id="calYear"></span>
+      </div>
+      <button class="arrow-btn" id="nextBtn">→</button>
+    </div>
+    <div class="cal-days-header">
+      <span>MO</span><span>TU</span><span>WE</span><span>TH</span><span>FR</span><span>SA</span><span>SU</span>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-legend">
+      <div class="legend-item"><span class="leg-dot free"></span>Свободно</div>
+      <div class="legend-item"><span class="leg-dot partial"></span>Частично</div>
+      <div class="legend-item"><span class="leg-dot full"></span>Полностью</div>
+    </div>
+  </section>
+
+  <section class="day-section">
+    <div class="day-empty" id="dayEmpty">
+      <div class="empty-icon">📅</div>
+      <p class="empty-title">Выбери день</p>
+      <p class="empty-sub">Нажми на любую дату чтобы управлять записями</p>
+    </div>
+    <div class="day-content" id="dayContent" style="display:none">
+      <div class="day-title-row">
+        <div>
+          <span class="day-label-text" id="dayLabel"></span>
+          <span class="day-slots-summary" id="daySlotsSummary"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="add-btn" id="addBtn">+ Новая запись</button>
+          <button class="close-btn" id="closeBtn">✕</button>
+        </div>
+      </div>
+      <div class="bookings-wrap" id="bookingsWrap"></div>
+      <div class="form-wrap" id="formWrap" style="display:none">
+        <div class="form-header"><span class="form-title">Новая запись</span></div>
+        <div class="form-body">
+          <div class="form-section-title">Клиент</div>
+          <div class="field-row">
+            <div class="field"><label>Имя</label><input type="text" id="fFirstName" placeholder="Имя"></div>
+            <div class="field"><label>Фамилия</label><input type="text" id="fLastName" placeholder="Фамилия"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Instagram</label><input type="text" id="fInstagram" placeholder="@username"></div>
+            <div class="field"><label>Телефон</label><input type="text" id="fPhone" placeholder="+7 700 000 00 00"></div>
+          </div>
+          <div class="form-section-title">Заказ</div>
+          <div class="field-row">
+            <div class="field">
+              <label>Тип заказа</label>
+              <select id="fType">
+                <option value="">Выбрать</option>
+                <option>Реклама</option>
+                <option>Мультик</option>
+                <option>Мультик Lux</option>
+                <option>Фильм</option>
+              </select>
+            </div>
+            <div class="field"><label>Время начала</label><input type="time" id="fTime" value="10:00"></div>
+          </div>
+          <div class="field"><label>Длительность</label><input type="text" id="fDuration" placeholder="например: 2 часа / 3 дня"></div>
+          <div class="form-section-title">Оплата</div>
+          <div class="field-row">
+            <div class="field"><label>Общая сумма (₸)</label><input type="number" id="fTotal" placeholder="0"></div>
+            <div class="field"><label>Предоплата (₸)</label><input type="number" id="fPrepay" placeholder="0"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Остаток (₸)</label><input type="number" id="fRemainder" placeholder="0" readonly style="opacity:0.6;cursor:default"></div>
+            <div class="field">
+              <label>Тип оплаты</label>
+              <select id="fPayType">
+                <option value="">Выбрать</option>
+                <option>Наличные</option>
+                <option>Kaspi</option>
+                <option>Карта</option>
+                <option>Перевод</option>
+              </select>
+            </div>
+          </div>
+          <div class="field"><label>Ответственный</label><input type="text" id="fManager" placeholder="Имя сотрудника"></div>
+          <div class="form-actions">
+            <button class="btn-cancel" id="cancelBtn">Отмена</button>
+            <button class="btn-save" id="saveBtn">Сохранить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<aside class="upcoming">
+  <div class="upcoming-header">
+    <span class="upcoming-title">UPCOMING</span>
+    <span class="upcoming-count" id="upcomingCount">0</span>
+  </div>
+  <div class="upcoming-list" id="upcomingList"><p class="no-upcoming">Нет записей</p></div>
+</aside>
+</div>
+
+<!-- ══════════════════════════════════════════
+     TAB 2 — TECH DEPARTMENT
+══════════════════════════════════════════ -->
+<div class="tab-content" id="page-tech">
+<div class="tech-layout">
+
+  <!-- Tech sidebar: team -->
+  <aside class="tech-sidebar">
+    <div class="tech-sidebar-header">
+      <span class="ts-title">КОМАНДА</span>
+      <button class="ts-add-btn" onclick="showAddMember()">+</button>
+    </div>
+    <div class="tech-members" id="techMembers"></div>
+
+    <!-- Stats -->
+    <div class="tech-stats">
+      <div class="ts-title" style="margin-bottom:10px">МЕСЯЦ</div>
+      <div class="stat-row">
+        <span class="stat-label">Завершено</span>
+        <span class="stat-val green" id="statDone">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">В работе</span>
+        <span class="stat-val" id="statActive">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Сумма</span>
+        <span class="stat-val green" id="statSum">0 ₸</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Остаток</span>
+        <span class="stat-val pink" id="statRemainder">0 ₸</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Tech main: task board -->
+  <main class="tech-main">
+    <div class="tech-board-header">
+      <div class="board-filter">
+        <button class="filter-btn active" onclick="filterTech('all', this)">Все</button>
+        <button class="filter-btn" onclick="filterTech('urgent', this)">🔴 Срочные</button>
+        <button class="filter-btn" onclick="filterTech('medium', this)">🟠 Средние</button>
+        <button class="filter-btn" onclick="filterTech('normal', this)">⚪ Обычные</button>
+      </div>
+      <div class="board-member-filter">
+        <select id="memberFilter" onchange="renderTechBoard()">
+          <option value="all">Все спецы</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="tech-board" id="techBoard">
+      <div class="tech-empty">
+        <div class="empty-icon">⚡</div>
+        <p class="empty-title">Нет активных задач</p>
+        <p class="empty-sub">Задачи появятся автоматически из Google Sheets</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Task detail panel -->
+  <aside class="task-detail" id="taskDetail" style="display:none">
+    <div class="td-header">
+      <span class="td-title">Карточка клиента</span>
+      <button class="close-btn" onclick="closeTaskDetail()">✕</button>
+    </div>
+    <div class="td-body" id="tdBody"></div>
+  </aside>
+</div>
+
+<!-- Add member modal -->
+<div class="modal-overlay" id="addMemberModal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Добавить специалиста</span>
+      <button class="close-btn" onclick="closeAddMember()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>Имя специалиста</label><input type="text" id="memberName" placeholder="Например: Артём"></div>
+      <div class="field"><label>Специализация</label>
+        <select id="memberSpec">
+          <option value="all">Все типы</option>
+          <option value="Реклама">Реклама</option>
+          <option value="Мультик">Мультик / Lux</option>
+          <option value="Фильм">Фильм</option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeAddMember()">Отмена</button>
+        <button class="btn-save" onclick="saveMember()">Добавить</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script src="app.js"></script>
+<script src="tech.js"></script>
+</body>
+</html>
