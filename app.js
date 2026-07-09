@@ -53,8 +53,28 @@ function switchTab(tab) {
 
 async function loadAll() {
   showLoading(true);
+
+  // Показываем кэш сразу пока грузим
+  const cached = localStorage.getItem('sixg_bookings_cache');
+  if (cached) {
+    try {
+      const { data: cachedData, ts } = JSON.parse(cached);
+      bookings = {};
+      (cachedData || []).forEach(b => {
+        if (HIDDEN_STATUSES.includes(b.status)) return;
+        if (!bookings[b.date_key]) bookings[b.date_key] = [];
+        bookings[b.date_key].push(b);
+      });
+      renderCal();
+      renderUpcoming();
+    } catch(e) {}
+  }
+
   try {
     const data = await sbFetch('bookings?select=*&order=time.asc');
+    // Сохраняем в кэш
+    localStorage.setItem('sixg_bookings_cache', JSON.stringify({ data, ts: Date.now() }));
+
     bookings = {};
     (data || []).forEach(b => {
       if (HIDDEN_STATUSES.includes(b.status)) return;
@@ -72,9 +92,11 @@ async function loadAll() {
     document.getElementById('counterVal').textContent = done.length;
   } catch(e) {
     console.error(e);
-    showToast('Ошибка соединения — повтор...', true);
-    setTimeout(loadAll, 5000);
+    if (!cached) showToast('Нет соединения с базой', true);
+    else showToast('Нет соединения — показываем кэш', true);
+    setTimeout(loadAll, 10000);
   }
+
   showLoading(false);
   renderCal();
   renderUpcoming();
